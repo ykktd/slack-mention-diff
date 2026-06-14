@@ -24,7 +24,7 @@ function doGet(e) {
     .setTitle(APP_TITLE)
     .setFaviconUrl(APP_FAVICON_URL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
 }
 
 function include(filename) {
