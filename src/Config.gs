@@ -5,6 +5,10 @@
 const APP_TITLE = '未完了者抽出・Slackメンション下書き送信';
 const MANAGEMENT_SPREADSHEET_NAME = 'Slack Mention Diff 管理用データ';
 
+// ブラウザタブのファビコン。setFaviconUrl はURLのパスが画像拡張子(.png等)で
+// 終わることを要求するため、パスが .png で終わる公開直リンク（実体: assets/app_icon.png）を使う。
+const APP_FAVICON_URL = 'https://raw.githubusercontent.com/ykktd/slack-mention-diff/main/assets/app_icon.png';
+
 const PROP_SPREADSHEET_ID = 'SPREADSHEET_ID';
 const PROP_SLACK_BOT_TOKEN = 'SLACK_BOT_TOKEN';
 const PROP_SLACK_CLIENT_ID = 'SLACK_CLIENT_ID';

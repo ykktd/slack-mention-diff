@@ -22,17 +22,9 @@ function doGet(e) {
   return HtmlService.createTemplateFromFile('Index')
     .evaluate()
     .setTitle(APP_TITLE)
-    .setFaviconUrl(getFaviconUrl_())
+    .setFaviconUrl(APP_FAVICON_URL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-}
-
-function getFaviconUrl_() {
-  // Google ドライブのファイルID
-  // 元のリンク: https://drive.google.com/file/d/1ei83WCwcCr9dDyDg3UPE2Iq6b4bDGcBG/view?usp=drive_link
-  const fileId = "1ei83WCwcCr9dDyDg3UPE2Iq6b4bDGcBG";
-  // ファイル拡張子を付ける（GAS が画像形式を判別するため）
-  return "https://drive.google.com/uc?id=" + fileId + "&.png";
 }
 
 function include(filename) {
