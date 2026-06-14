@@ -200,3 +200,7 @@ clasp deploy -i <deploymentId> -V <versionNumber> -d "Update Slack Mention Diff"
 ```
 
 既存のWebアプリURLを維持するには、既存Webアプリの `deploymentId` を指定してデプロイします。
+
+## License
+
+MIT License. See [LICENSE](./LICENSE).
