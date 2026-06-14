@@ -1,0 +1,539 @@
+<script>
+  (function () {
+    const state = {
+      bootstrap: null,
+      result: null,
+      selections: {},
+    };
+
+    const els = {};
+
+    document.addEventListener('DOMContentLoaded', init);
+
+    function init() {
+      [
+        'refreshUsersBtn',
+        'setupBanner',
+        'slackConnectionBadge',
+        'dmStatus',
+        'dmNotice',
+        'connectSlackBtn',
+        'sendDmBtn',
+        'targetInput',
+        'completedInput',
+        'cacheMeta',
+        'runMatchBtn',
+        'results',
+        'targetCount',
+        'completedCount',
+        'incompleteCount',
+        'mentionableCount',
+        'needsReviewCount',
+        'unmatchedCount',
+        'mentionableBadge',
+        'reviewBadge',
+        'unmatchedBadge',
+        'mentionableList',
+        'reviewSection',
+        'reviewList',
+        'unmatchedSection',
+        'unmatchedList',
+        'mentionOutput',
+        'toast',
+        'overlay',
+        'overlayText',
+      ].forEach(function (id) {
+        els[id] = document.getElementById(id);
+      });
+
+      els.refreshUsersBtn.addEventListener('click', refreshSlackUsers);
+      els.runMatchBtn.addEventListener('click', runMatch);
+      els.connectSlackBtn.addEventListener('click', startSlackOAuth);
+      els.sendDmBtn.addEventListener('click', sendMentionDraft);
+      createIcons();
+      bootstrap();
+    }
+
+    function bootstrap() {
+      setBusy(true, '準備を確認しています。');
+      callApi('apiBootstrap')
+        .then(function (data) {
+          state.bootstrap = data;
+          renderBootstrap(data);
+        })
+        .catch(function (err) {
+          showToast(errorMessage(err));
+          els.cacheMeta.textContent = '利用準備の情報を読み込めませんでした。';
+        })
+        .finally(function () {
+          setBusy(false);
+        });
+    }
+
+    function renderBootstrap(data) {
+      const setupComplete = Boolean(data && data.setupComplete);
+      els.setupBanner.classList.toggle('hidden', setupComplete);
+      els.runMatchBtn.disabled = !setupComplete;
+      els.refreshUsersBtn.disabled = !setupComplete;
+
+      if (!setupComplete) {
+        els.cacheMeta.textContent = '管理用スプレッドシートで初回セットアップを実行すると使えるようになります。';
+        updateDmControls();
+        return;
+      }
+
+      const countText = String(data.slackUserCount || 0) + '人';
+      const tokenText = data.slackTokenConfigured ? '' : ' / Slack Bot設定が未完了';
+      const oauthText = data.slackOAuthConfigured ? '' : ' / Slack連携設定が未完了';
+      const last = data.lastSlackRefresh && data.lastSlackRefresh.updatedAt
+        ? ' / 最終更新 ' + formatDateTime(data.lastSlackRefresh.updatedAt)
+        : ' / まだ更新されていません';
+      els.cacheMeta.textContent = 'Slackメンバー一覧 ' + countText + last + tokenText + oauthText;
+      updateDmControls();
+    }
+
+    function refreshSlackUsers() {
+      setBusy(true, 'Slackメンバー一覧を更新しています。');
+      callApi('apiRefreshSlackUsers')
+        .then(function (data) {
+          state.bootstrap = Object.assign({}, state.bootstrap || {}, data, {
+            setupComplete: true,
+            slackTokenConfigured: true,
+          });
+          renderBootstrap(state.bootstrap);
+          showToast('Slackメンバー一覧を更新しました。');
+        })
+        .catch(function (err) {
+          showToast(errorMessage(err));
+        })
+        .finally(function () {
+          setBusy(false);
+        });
+    }
+
+    function startSlackOAuth() {
+      setBusy(true, 'Slack連携を開いています。');
+      callApi('apiStartSlackOAuth')
+        .then(function (data) {
+          window.top.location.href = data.url;
+        })
+        .catch(function (err) {
+          const message = errorMessage(err);
+          setDmNotice(message, 'error');
+          showToast(firstLine(message));
+          setBusy(false);
+        });
+    }
+
+    function sendMentionDraft() {
+      const blocker = getDmSendBlocker();
+      if (blocker) {
+        setDmNotice(blocker, 'warn');
+        showToast(firstLine(blocker));
+        updateDmControls();
+        return;
+      }
+
+      setBusy(true, '自分のSlack DMへ送っています。');
+      callApi('apiSendMentionDraftToSelf', { mentionText: getMentionDraftText() })
+        .then(function (data) {
+          state.bootstrap = Object.assign({}, state.bootstrap || {}, {
+            slackConnected: true,
+            slackDisplayName: data.slackDisplayName || data.slackUserId || '',
+          });
+          setDmNotice('自分のSlack DMに送りました。\n届いたメンションをコピーして、必要な案内文と一緒にチャンネルへ貼ってください。', 'success');
+          showToast('自分のSlack DMに送りました。');
+          updateDmControls();
+        })
+        .catch(function (err) {
+          const message = errorMessage(err);
+          setDmNotice(message, 'error');
+          showToast(firstLine(message));
+        })
+        .finally(function () {
+          setBusy(false);
+        });
+    }
+
+    function runMatch() {
+      const targetText = els.targetInput.value;
+      const completedText = els.completedInput.value;
+
+      if (!targetText.trim()) {
+        showToast('確認したいメンバーを入力してください。');
+        return;
+      }
+
+      state.selections = {};
+      setDmNotice('', '');
+      setBusy(true, '未完了メンバーを確認しています。');
+      callApi('apiRunMatch', { targetText: targetText, completedText: completedText })
+        .then(function (data) {
+          state.result = data.result;
+          renderResults(data.result);
+          els.results.classList.remove('hidden');
+          window.setTimeout(function () {
+            els.results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }, 80);
+        })
+        .catch(function (err) {
+          showToast(errorMessage(err));
+        })
+        .finally(function () {
+          setBusy(false);
+        });
+    }
+
+    function renderResults(result) {
+      const summary = result.summary || {};
+      setText('targetCount', summary.targetCount || 0);
+      setText('completedCount', summary.completedCount || 0);
+      setText('incompleteCount', summary.incompleteCount || 0);
+      setText('mentionableCount', summary.mentionableCount || 0);
+      setText('needsReviewCount', summary.needsReviewCount || 0);
+      setText('unmatchedCount', summary.unmatchedCount || 0);
+      setText('mentionableBadge', (summary.mentionableCount || 0) + '人');
+      setText('reviewBadge', (summary.needsReviewCount || 0) + '人');
+      setText('unmatchedBadge', (summary.unmatchedCount || 0) + '人');
+
+      renderMentionable(result.mentionable || []);
+      renderReview(result.needsReview || []);
+      renderUnmatched(result.unmatched || []);
+      updateMentionOutput();
+      createIcons();
+    }
+
+    function renderMentionable(items) {
+      clear(els.mentionableList);
+      if (!items.length) {
+        els.mentionableList.appendChild(empty('そのままメンションできる人はいません。'));
+        return;
+      }
+
+      items.forEach(function (item) {
+        const row = element('div', 'person-row');
+        const main = element('div', 'person-main');
+        main.appendChild(element('div', 'person-name', item.originalName));
+        main.appendChild(element('div', 'person-meta', slackMeta(item.user)));
+        row.appendChild(main);
+        row.appendChild(element('span', 'badge', '<@' + item.user.userId + '>'));
+        els.mentionableList.appendChild(row);
+      });
+    }
+
+    function renderReview(items) {
+      clear(els.reviewList);
+      els.reviewSection.classList.toggle('hidden', !items.length);
+      if (!items.length) return;
+
+      items.forEach(function (item) {
+        const wrap = element('div', 'review-item');
+        const titleText = item.reason === 'duplicate_target'
+          ? item.normalizedName + ' さんは確認したいメンバーの中に同じ名前があります。'
+          : item.normalizedName + ' さんにあたるSlackメンバーを選んでください。';
+        wrap.appendChild(element('p', 'review-title', titleText));
+
+        if (item.originalNames && item.originalNames.length > 1) {
+          wrap.appendChild(element('p', 'review-note', '貼り付けた名前: ' + item.originalNames.join(' / ')));
+        }
+
+        if (!item.candidates || !item.candidates.length) {
+          wrap.appendChild(element('p', 'review-note', '候補が見つかりませんでした。メンションに含めない場合は「該当者なし」を選んでください。'));
+          const emptyList = element('div', 'candidate-list');
+          emptyList.appendChild(noCandidateRow(item));
+          wrap.appendChild(emptyList);
+          els.reviewList.appendChild(wrap);
+          return;
+        }
+
+        const list = element('div', 'candidate-list');
+        item.candidates.forEach(function (candidate) {
+          list.appendChild(candidateRow(item, candidate));
+        });
+        list.appendChild(noCandidateRow(item));
+        wrap.appendChild(list);
+        els.reviewList.appendChild(wrap);
+      });
+    }
+
+    function candidateRow(item, candidate) {
+      const id = item.key + ':' + candidate.userId;
+      const label = element('label', 'candidate-row');
+      const input = document.createElement('input');
+      input.type = 'radio';
+      input.name = item.key;
+      input.value = candidate.userId;
+      input.id = id;
+      input.checked = hasOwn(state.selections, item.key) && state.selections[item.key] === candidate.userId;
+      input.addEventListener('change', function () {
+        state.selections[item.key] = candidate.userId;
+        updateMentionOutput();
+      });
+
+      label.appendChild(input);
+      label.appendChild(avatar(candidate));
+
+      const text = element('div', 'candidate-label');
+      text.appendChild(element('div', 'candidate-name', candidate.label || candidate.userId));
+      text.appendChild(element('div', 'candidate-meta', slackMeta(candidate) + ' / ' + candidate.matchLabel));
+      label.appendChild(text);
+      return label;
+    }
+
+    function noCandidateRow(item) {
+      const label = element('label', 'candidate-row');
+      const input = document.createElement('input');
+      input.type = 'radio';
+      input.name = item.key;
+      input.value = '';
+      input.checked = hasOwn(state.selections, item.key) && state.selections[item.key] === '';
+      input.addEventListener('change', function () {
+        state.selections[item.key] = '';
+        updateMentionOutput();
+      });
+
+      label.appendChild(input);
+      label.appendChild(element('span', 'avatar', '-'));
+
+      const text = element('div', 'candidate-label');
+      text.appendChild(element('div', 'candidate-name', '該当者なし'));
+      text.appendChild(element('div', 'candidate-meta', '自分に送るメンションには含めません'));
+      label.appendChild(text);
+      return label;
+    }
+
+    function renderUnmatched(items) {
+      clear(els.unmatchedList);
+      els.unmatchedSection.classList.toggle('hidden', !items.length);
+      if (!items.length) return;
+
+      items.forEach(function (item) {
+        const row = element('div', 'person-row');
+        const main = element('div', 'person-main');
+        main.appendChild(element('div', 'person-name', item.originalName));
+        main.appendChild(element('div', 'person-meta', '正規化名: ' + item.normalizedName));
+        row.appendChild(main);
+        els.unmatchedList.appendChild(row);
+      });
+    }
+
+    function updateMentionOutput() {
+      els.mentionOutput.value = getMentionDraftText();
+      updateDmControls();
+    }
+
+    function getMentionDraftText() {
+      return getMentionDraftMentions().join(' ');
+    }
+
+    function getMentionDraftMentions() {
+      const result = state.result || {};
+      const mentions = (result.mentionable || []).map(function (item) {
+        return '<@' + item.user.userId + '>';
+      });
+      const reviewItems = result.needsReview || [];
+
+      reviewItems.forEach(function (item) {
+        const selectedId = hasOwn(state.selections, item.key) ? state.selections[item.key] : '';
+        if (selectedId) mentions.push('<@' + selectedId + '>');
+      });
+
+      return mentions;
+    }
+
+    function updateDmControls() {
+      if (!els.dmStatus) return;
+
+      const bootstrap = state.bootstrap || {};
+      const setupComplete = Boolean(bootstrap.setupComplete);
+      const oauthConfigured = Boolean(bootstrap.slackOAuthConfigured);
+      const tokenConfigured = Boolean(bootstrap.slackTokenConfigured);
+      const connected = Boolean(bootstrap.slackConnected);
+      const blocker = getDmSendBlocker();
+      const unmatchedCount = state.result && state.result.summary ? Number(state.result.summary.unmatchedCount || 0) : 0;
+
+      els.connectSlackBtn.classList.toggle('hidden', connected || !oauthConfigured);
+      els.sendDmBtn.classList.toggle('hidden', !connected);
+      els.sendDmBtn.disabled = Boolean(blocker);
+
+      if (!setupComplete) {
+        setText('slackConnectionBadge', '未設定');
+        els.slackConnectionBadge.className = 'badge badge-muted';
+        els.dmStatus.textContent = '初回セットアップが終わると、Slack連携とDM送信を使えます。';
+        return;
+      }
+
+      if (!oauthConfigured) {
+        setText('slackConnectionBadge', '連携設定待ち');
+        els.slackConnectionBadge.className = 'badge badge-warn';
+        els.dmStatus.textContent = 'Slack連携の管理者設定がまだ終わっていません。管理者に確認してください。';
+        return;
+      }
+
+      if (!tokenConfigured) {
+        setText('slackConnectionBadge', 'Bot設定待ち');
+        els.slackConnectionBadge.className = 'badge badge-warn';
+        els.dmStatus.textContent = 'Slack Botの管理者設定がまだ終わっていません。管理者に確認してください。';
+        return;
+      }
+
+      if (!connected) {
+        setText('slackConnectionBadge', '未連携');
+        els.slackConnectionBadge.className = 'badge badge-warn';
+        els.dmStatus.textContent = '先にSlackと連携してください。連携すると、自分のSlack DMへメンションを送れます。';
+        return;
+      }
+
+      setText('slackConnectionBadge', bootstrap.slackDisplayName ? '連携済み' : '連携済み');
+      els.slackConnectionBadge.className = 'badge badge-slack';
+
+      if (blocker) {
+        els.dmStatus.textContent = blocker;
+        return;
+      }
+
+      if (unmatchedCount > 0) {
+        els.dmStatus.textContent = 'Slackで見つからない人' + unmatchedCount + '名は、自分に送るメンションには含まれません。';
+        return;
+      }
+
+      els.dmStatus.textContent = '未完了メンバーのメンションだけを、自分のSlack DMに送ります。';
+    }
+
+    function getDmSendBlocker() {
+      const bootstrap = state.bootstrap || {};
+      const result = state.result;
+      if (!bootstrap.setupComplete) return '初回セットアップが未完了です。';
+      if (!bootstrap.slackOAuthConfigured) return 'Slack連携の管理者設定が未完了です。';
+      if (!bootstrap.slackTokenConfigured) return 'Slack Botの管理者設定が未完了です。';
+      if (!bootstrap.slackConnected) return 'Slack連携が必要です。';
+      if (!result) return '先に未完了メンバーを確認してください。';
+
+      const unresolved = countUnresolvedReviewItems();
+      if (unresolved > 0) {
+        return 'まだ選択が必要な人がいます。正しいSlackメンバー、または「該当者なし」を選んでください。';
+      }
+
+      if (getMentionDraftMentions().length === 0) {
+        return '自分のDMへ送れるメンションがありません。';
+      }
+
+      return '';
+    }
+
+    function countUnresolvedReviewItems() {
+      const result = state.result || {};
+      return (result.needsReview || []).filter(function (item) {
+        return !hasOwn(state.selections, item.key);
+      }).length;
+    }
+
+    function setDmNotice(message, type) {
+      els.dmNotice.textContent = message || '';
+      els.dmNotice.className = 'dm-notice' + (type ? ' dm-notice-' + type : '');
+      els.dmNotice.classList.toggle('hidden', !message);
+    }
+
+    function callApi(name, payload) {
+      return new Promise(function (resolve, reject) {
+        if (!window.google || !google.script || !google.script.run) {
+          reject(new Error('GASのWebアプリとして開いてください。'));
+          return;
+        }
+
+        const runner = google.script.run.withSuccessHandler(resolve).withFailureHandler(reject);
+        if (typeof payload === 'undefined') {
+          runner[name]();
+        } else {
+          runner[name](payload);
+        }
+      });
+    }
+
+    function avatar(candidate) {
+      if (candidate.imageUrl) {
+        const img = document.createElement('img');
+        img.className = 'avatar';
+        img.src = candidate.imageUrl;
+        img.alt = '';
+        return img;
+      }
+
+      const label = candidate.label || candidate.displayName || candidate.realName || candidate.name || candidate.userId || '?';
+      return element('span', 'avatar', label.slice(0, 1));
+    }
+
+    function slackMeta(user) {
+      const parts = [];
+      if (user.displayName) parts.push(user.displayName);
+      if (user.name) parts.push('@' + user.name);
+      if (user.realName && user.realName !== user.displayName) parts.push(user.realName);
+      if (user.userId) parts.push(user.userId);
+      return parts.join(' / ');
+    }
+
+    function setBusy(isBusy, text) {
+      els.overlay.classList.toggle('hidden', !isBusy);
+      if (text) els.overlayText.textContent = text;
+    }
+
+    function showToast(message) {
+      els.toast.textContent = message;
+      els.toast.classList.remove('hidden');
+      window.clearTimeout(showToast.timer);
+      showToast.timer = window.setTimeout(function () {
+        els.toast.classList.add('hidden');
+      }, 3200);
+    }
+
+    function errorMessage(err) {
+      return err && err.message ? err.message : String(err || 'エラーが発生しました。');
+    }
+
+    function firstLine(text) {
+      return String(text || '').split(/\n/)[0];
+    }
+
+    function formatDateTime(value) {
+      if (!value) return '';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return value;
+      return date.toLocaleString('ja-JP', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    }
+
+    function setText(id, value) {
+      els[id].textContent = String(value);
+    }
+
+    function clear(node) {
+      while (node.firstChild) node.removeChild(node.firstChild);
+    }
+
+    function hasOwn(object, key) {
+      return Object.prototype.hasOwnProperty.call(object || {}, key);
+    }
+
+    function empty(text) {
+      return element('div', 'empty', text);
+    }
+
+    function element(tag, className, text) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (typeof text !== 'undefined') node.textContent = String(text);
+      return node;
+    }
+
+    function createIcons() {
+      if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+      }
+    }
+  })();
+</script>

@@ -1,0 +1,93 @@
+/**
+ * Config.gs - shared constants and Script Properties helpers.
+ */
+
+const APP_TITLE = '未完了者抽出・Slackメンション下書き送信';
+const MANAGEMENT_SPREADSHEET_NAME = 'Slack Mention Diff 管理用データ';
+
+const PROP_SPREADSHEET_ID = 'SPREADSHEET_ID';
+const PROP_SLACK_BOT_TOKEN = 'SLACK_BOT_TOKEN';
+const PROP_SLACK_CLIENT_ID = 'SLACK_CLIENT_ID';
+const PROP_SLACK_CLIENT_SECRET = 'SLACK_CLIENT_SECRET';
+const PROP_SLACK_REDIRECT_URI = 'SLACK_REDIRECT_URI';
+const PROP_SLACK_OAUTH_STATE_PREFIX = 'SLACK_OAUTH_STATE_';
+
+const SLACK_API_BASE = 'https://slack.com/api';
+const SLACK_OAUTH_AUTHORIZE_URL = 'https://slack.com/oauth/v2/authorize';
+const SLACK_OAUTH_BOT_SCOPES = ['users:read', 'chat:write', 'im:write'];
+const SLACK_OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
+const SLACK_USERS_PAGE_LIMIT = 200;
+const DAILY_TRIGGER_FUNCTION = 'refreshSlackUsersDaily';
+
+const SHEET_SETTINGS = 'Settings';
+const SHEET_SLACK_USERS = 'SlackUsers';
+const SHEET_NAME_MAP = 'NameMap';
+const SHEET_USER_MAP = 'UserMap';
+const SHEET_LAST_RUN = 'LastRun';
+const SHEET_LOGS = 'Logs';
+
+const LAST_RUN_SLACK_REFRESH = 'slack_users_refresh';
+const LAST_RUN_MATCH = 'match';
+
+const SHEET_HEADERS = {
+  Settings: ['key', 'value', 'updated_at'],
+  SlackUsers: [
+    'user_id',
+    'display_name',
+    'real_name',
+    'name',
+    'normalized_display_name',
+    'normalized_real_name',
+    'image_url',
+    'is_deleted',
+    'is_bot',
+    'updated_at',
+  ],
+  NameMap: [
+    'list_name',
+    'normalized_name',
+    'slack_user_id',
+    'slack_display_name',
+    'confirmed_by',
+    'confirmed_at',
+    'note',
+  ],
+  UserMap: [
+    'google_user',
+    'slack_user_id',
+    'slack_team_id',
+    'slack_display_name',
+    'connected_at',
+    'last_used_at',
+  ],
+  LastRun: ['name', 'status', 'message', 'count', 'updated_at'],
+  Logs: ['timestamp', 'level', 'event', 'message', 'details'],
+};
+
+function getScriptProperty_(key) {
+  return PropertiesService.getScriptProperties().getProperty(key);
+}
+
+function setScriptProperty_(key, value) {
+  PropertiesService.getScriptProperties().setProperty(key, String(value));
+}
+
+function hasScriptProperty_(key) {
+  return Boolean(getScriptProperty_(key));
+}
+
+function requireScriptProperty_(key) {
+  const value = getScriptProperty_(key);
+  if (!value) {
+    throw new Error('Script Properties に ' + key + ' が設定されていません。');
+  }
+  return value;
+}
+
+function nowIso_() {
+  return new Date().toISOString();
+}
+
+function toSafeMessage_(err) {
+  return err && err.message ? String(err.message) : String(err);
+}

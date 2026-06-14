@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <base target="_top" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="apple-mobile-web-app-title" content="未完了メンバー確認" />
+    <title>未完了メンバー確認・Slackメンション作成</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <?!= include('Stylesheet'); ?>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div class="topbar-inner">
+          <div class="brand">
+            <span class="brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 512 512" width="24" height="24" role="img" aria-label="">
+                <rect width="512" height="512" rx="116" fill="#3d6b52" />
+                <g
+                  fill="none"
+                  stroke="#f0ede8"
+                  stroke-width="36"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="252" cy="256" r="58" />
+                  <path d="M386 331 A150 150 0 1 0 335 383 C372 416 426 410 450 366" />
+                </g>
+              </svg>
+            </span>
+            <span>未完了メンバー確認</span>
+          </div>
+          <button type="button" id="refreshUsersBtn" class="btn btn-secondary btn-small" disabled>
+            <span data-lucide="refresh-cw"></span>
+            Slackメンバー一覧を更新
+          </button>
+        </div>
+      </header>
+
+      <main class="body">
+        <section id="setupBanner" class="banner banner-warn hidden">
+          <div class="banner-icon" data-lucide="circle-alert"></div>
+          <div>
+            <div class="banner-title">まだ利用準備が終わっていません</div>
+            <p>管理用スプレッドシートのメニュー「メンション抽出」から、初回セットアップを実行してください。</p>
+          </div>
+        </section>
+
+        <section class="intro">
+          <p class="eyebrow">全員リストから完了済みの人を引きます</p>
+          <h1>まだ完了していない人をSlackで知らせる</h1>
+          <p class="lead">
+            出欠、フォーム回答、提出物、確認依頼などに使えます。全員の名前と完了済みの人を貼ると、
+            未完了メンバーのSlackメンションだけを作ります。自分のDMに届いたメンションを、必要な案内文と一緒にチャンネルへ貼ってください。
+          </p>
+        </section>
+
+        <section class="card input-card">
+          <div class="section-header">
+            <span class="section-label">リストを貼り付ける</span>
+            <span class="section-line"></span>
+          </div>
+
+          <div class="input-grid">
+            <label class="field">
+              <span class="field-label">確認したいメンバー</span>
+              <span class="field-help">全員の名前を1行に1人ずつ貼り付けてください。</span>
+              <textarea
+                id="targetInput"
+                rows="10"
+                spellcheck="false"
+                placeholder="山田 太郎&#10;佐藤 花子&#10;鈴木 一郎&#10;田中 太郎"
+              ></textarea>
+            </label>
+
+            <label class="field">
+              <span class="field-label">すでに完了したメンバー</span>
+              <span class="field-help">回答・提出・確認などが済んだ人だけを1行に1人ずつ貼り付けてください。</span>
+              <textarea
+                id="completedInput"
+                rows="10"
+                spellcheck="false"
+                placeholder="山田太郎&#10;鈴木 一郎"
+              ></textarea>
+            </label>
+          </div>
+
+          <div class="input-actions">
+            <div id="cacheMeta" class="cache-meta">Slackメンバー一覧を確認中です。</div>
+            <button type="button" id="runMatchBtn" class="btn btn-primary" disabled>
+              <span data-lucide="list-checks"></span>
+              未完了メンバーを確認
+            </button>
+          </div>
+        </section>
+
+        <section id="results" class="results hidden" aria-live="polite">
+          <div class="section-header">
+            <span class="section-label">確認結果</span>
+            <span class="section-line"></span>
+          </div>
+
+          <section class="card dm-card">
+            <div class="card-title-row">
+              <h2>メンションを自分に送る</h2>
+              <span id="slackConnectionBadge" class="badge badge-muted">確認中</span>
+            </div>
+            <p id="dmStatus" class="card-help">Slackへ送る準備を確認しています。</p>
+            <div id="dmNotice" class="dm-notice hidden"></div>
+            <div class="dm-actions">
+              <button type="button" id="connectSlackBtn" class="btn btn-secondary hidden">
+                <span data-lucide="link"></span>
+                Slackと連携
+              </button>
+              <button type="button" id="sendDmBtn" class="btn btn-primary" disabled>
+                <span data-lucide="send"></span>
+                自分のDMへ送る
+              </button>
+            </div>
+          </section>
+
+          <div class="summary-grid">
+            <div class="summary-chip"><span id="targetCount">0</span><small>確認対象</small></div>
+            <div class="summary-chip"><span id="completedCount">0</span><small>完了済み</small></div>
+            <div class="summary-chip"><span id="incompleteCount">0</span><small>未完了</small></div>
+            <div class="summary-chip accent"><span id="mentionableCount">0</span><small>メンション可</small></div>
+            <div class="summary-chip warn"><span id="needsReviewCount">0</span><small>選択が必要</small></div>
+            <div class="summary-chip muted"><span id="unmatchedCount">0</span><small>見つからない</small></div>
+          </div>
+
+          <div class="result-stack">
+            <section class="card result-card">
+              <div class="card-title-row">
+                <h2>そのままメンションする人</h2>
+                <span id="mentionableBadge" class="badge">0人</span>
+              </div>
+              <div id="mentionableList" class="person-list"></div>
+            </section>
+
+            <section id="reviewSection" class="card result-card hidden">
+              <div class="card-title-row">
+                <h2>確認して選ぶ人</h2>
+                <span id="reviewBadge" class="badge badge-warn">0人</span>
+              </div>
+              <p class="card-help">正しいSlackメンバーを選ぶと、自分に送るメンションに追加されます。含めない場合は「該当者なし」を選んでください。</p>
+              <div id="reviewList" class="review-list"></div>
+            </section>
+
+            <section id="unmatchedSection" class="card result-card hidden">
+              <div class="card-title-row">
+                <h2>Slackで見つからない人</h2>
+                <span id="unmatchedBadge" class="badge badge-muted">0人</span>
+              </div>
+              <p class="card-help">以下の人はSlackメンバー一覧で見つかりませんでした。自分に送るメンションには含めません。</p>
+              <div id="unmatchedList" class="person-list"></div>
+            </section>
+
+            <details class="debug-mention">
+              <summary>自分のDMへ送るメンションを確認する</summary>
+              <textarea id="mentionOutput" rows="4" readonly placeholder="<@USERID> の形式で表示されます"></textarea>
+            </details>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+    <div id="overlay" class="overlay hidden">
+      <div class="spinner"></div>
+      <span id="overlayText">処理中です。</span>
+    </div>
+
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <?!= include('JavaScript'); ?>
+  </body>
+</html>
