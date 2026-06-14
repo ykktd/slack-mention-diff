@@ -15,6 +15,11 @@
       [
         'refreshUsersBtn',
         'setupBanner',
+        'loginGate',
+        'loginGateBtn',
+        'loginGateNote',
+        'loginGateConfig',
+        'inputCard',
         'slackConnectionBadge',
         'dmStatus',
         'dmNotice',
@@ -49,6 +54,7 @@
 
       els.refreshUsersBtn.addEventListener('click', refreshSlackUsers);
       els.runMatchBtn.addEventListener('click', runMatch);
+      els.loginGateBtn.addEventListener('click', startSlackOAuth);
       els.connectSlackBtn.addEventListener('click', startSlackOAuth);
       els.sendDmBtn.addEventListener('click', sendMentionDraft);
       createIcons();
@@ -73,12 +79,23 @@
 
     function renderBootstrap(data) {
       const setupComplete = Boolean(data && data.setupComplete);
+      const oauthConfigured = Boolean(data && data.slackOAuthConfigured);
+      const connected = Boolean(data && data.slackConnected);
+      const gated = setupComplete && !connected;
+
       els.setupBanner.classList.toggle('hidden', setupComplete);
-      els.runMatchBtn.disabled = !setupComplete;
-      els.refreshUsersBtn.disabled = !setupComplete;
+      applyLoginGate(gated, oauthConfigured);
+      els.runMatchBtn.disabled = !setupComplete || gated;
+      els.refreshUsersBtn.disabled = !setupComplete || gated;
 
       if (!setupComplete) {
         els.cacheMeta.textContent = '管理用スプレッドシートで初回セットアップを実行すると使えるようになります。';
+        updateDmControls();
+        return;
+      }
+
+      if (gated) {
+        els.cacheMeta.textContent = 'Slackでログインすると、メンバー一覧と照合できます。';
         updateDmControls();
         return;
       }
@@ -93,6 +110,29 @@
       updateDmControls();
     }
 
+    function applyLoginGate(gated, oauthConfigured) {
+      els.loginGate.classList.toggle('hidden', !gated);
+      els.inputCard.classList.toggle('hidden', gated);
+      if (gated) {
+        els.results.classList.add('hidden');
+      }
+
+      els.loginGateBtn.classList.toggle('hidden', !oauthConfigured);
+      els.loginGateNote.classList.toggle('hidden', !oauthConfigured);
+      els.loginGateConfig.classList.toggle('hidden', oauthConfigured);
+    }
+
+    function handleNeedsLogin(err) {
+      if (errorMessage(err) !== 'NEEDS_SLACK_LOGIN') return false;
+      state.bootstrap = Object.assign({}, state.bootstrap || {}, { slackConnected: false });
+      applyLoginGate(true, Boolean((state.bootstrap || {}).slackOAuthConfigured));
+      els.runMatchBtn.disabled = true;
+      els.refreshUsersBtn.disabled = true;
+      updateDmControls();
+      showToast('Slackでログインしてください。');
+      return true;
+    }
+
     function refreshSlackUsers() {
       setBusy(true, 'Slackメンバー一覧を更新しています。');
       callApi('apiRefreshSlackUsers')
@@ -105,7 +145,7 @@
           showToast('Slackメンバー一覧を更新しました。');
         })
         .catch(function (err) {
-          showToast(errorMessage(err));
+          if (!handleNeedsLogin(err)) showToast(errorMessage(err));
         })
         .finally(function () {
           setBusy(false);
@@ -147,6 +187,7 @@
           updateDmControls();
         })
         .catch(function (err) {
+          if (handleNeedsLogin(err)) return;
           const message = errorMessage(err);
           setDmNotice(message, 'error');
           showToast(firstLine(message));
@@ -179,7 +220,7 @@
           }, 80);
         })
         .catch(function (err) {
-          showToast(errorMessage(err));
+          if (!handleNeedsLogin(err)) showToast(errorMessage(err));
         })
         .finally(function () {
           setBusy(false);
@@ -449,13 +490,13 @@
       }
 
       if (!connected) {
-        setText('slackConnectionBadge', '未連携');
+        setText('slackConnectionBadge', '未ログイン');
         els.slackConnectionBadge.className = 'badge badge-warn';
-        els.dmStatus.textContent = '先にSlackと連携してください。連携すると、自分のSlack DMへメンションを送れます。';
+        els.dmStatus.textContent = '先にSlackでログインしてください。ログインすると、自分のSlack DMへメンションを送れます。';
         return;
       }
 
-      setText('slackConnectionBadge', bootstrap.slackDisplayName ? '連携済み' : '連携済み');
+      setText('slackConnectionBadge', 'ログイン済み');
       els.slackConnectionBadge.className = 'badge badge-slack';
 
       if (blocker) {
@@ -477,7 +518,7 @@
       if (!bootstrap.setupComplete) return '初回セットアップが未完了です。';
       if (!bootstrap.slackOAuthConfigured) return 'Slack連携の管理者設定が未完了です。';
       if (!bootstrap.slackTokenConfigured) return 'Slack Botの管理者設定が未完了です。';
-      if (!bootstrap.slackConnected) return 'Slack連携が必要です。';
+      if (!bootstrap.slackConnected) return 'Slackでログインが必要です。';
       if (!result) return '先に未完了メンバーを確認してください。';
 
       const unresolved = countUnresolvedReviewItems();

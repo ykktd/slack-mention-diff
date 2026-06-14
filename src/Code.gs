@@ -27,6 +27,10 @@ function doGet(e) {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
 }
 
+function doPost(e) {
+  return handleSlackLinkCommand_(e);
+}
+
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
@@ -130,7 +134,8 @@ function showSlackTokenGuide() {
       '4. プロパティ: SLACK_BOT_TOKEN\n' +
       '5. 値: Slack AppのBot User OAuth Token（xoxb-...）\n\n' +
       'OAuth連携も使う場合は SLACK_CLIENT_ID / SLACK_CLIENT_SECRET / SLACK_REDIRECT_URI も設定します。\n' +
-      'Slack App側では Bot Token Scopes に users:read, chat:write, im:write が必要です。',
+      'Slash Commandも使う場合は SLACK_VERIFICATION_TOKEN も設定します。\n' +
+      'Slack App側では Bot Token Scopes に users:read, chat:write, im:write, commands が必要です。',
     ui.ButtonSet.OK
   );
 }
@@ -139,15 +144,107 @@ function showDeployGuide() {
   const ui = SpreadsheetApp.getUi();
   ui.alert(
     'Webアプリのデプロイ手順',
-    '1. Apps Scriptエディタを開く\n' +
-      '2. 右上「デプロイ」→「新しいデプロイ」\n' +
-      '3. 種類で「ウェブアプリ」を選ぶ\n' +
-      '4. 次のユーザーとして実行: 自分\n' +
-      '5. アクセスできるユーザー: 全員（Googleアカウントでの利用を推奨）\n' +
-      '6. デプロイ後のURLをサークル内に共有する\n\n' +
-      'コード更新後は「デプロイを管理」から既存デプロイを新しいバージョンへ更新してください。',
+    'claspを使う場合:\n' +
+      '1. clasp push\n' +
+      '2. clasp version "Update Slack Mention Diff"\n' +
+      '3. clasp deployments\n' +
+      '4. clasp deploy -i <deploymentId> -V <versionNumber> -d "Update Slack Mention Diff"\n\n' +
+      'Webアプリ設定:\n' +
+      '次のユーザーとして実行: 自分\n' +
+      'アクセスできるユーザー: 全員（匿名ユーザーを含む）\n\n' +
+      '既存URLを維持する場合は、既存WebアプリのdeploymentIdを指定してください。',
     ui.ButtonSet.OK
   );
+}
+
+function handleSlackLinkCommand_(e) {
+  const params = (e && e.parameter) || {};
+
+  try {
+    validateSlackLinkCommandRequest_(params);
+    postSlackCommandResponse_(params.response_url, {
+      response_type: 'ephemeral',
+      text: buildSlackLinkCommandText_(getSlackRedirectUri_()),
+      unfurl_links: false,
+      unfurl_media: false,
+    });
+  } catch (err) {
+    console.error('handleSlackLinkCommand_ failed: ' + ((err && err.stack) || err));
+    try {
+      if (params.response_url) {
+        postSlackCommandResponse_(params.response_url, {
+          response_type: 'ephemeral',
+          text:
+            'このコマンドを実行できませんでした。\n' +
+            '管理者にSlash CommandのRequest URL、Verification Token、Team ID設定を確認してもらってください。',
+        });
+      }
+    } catch (postErr) {
+      console.error('postSlackCommandResponse_ failed: ' + ((postErr && postErr.stack) || postErr));
+    }
+  }
+
+  return createSlackEmptyCommandResponse_();
+}
+
+function validateSlackLinkCommandRequest_(params) {
+  // GAS doPost does not expose Slack request-signing headers, so use the legacy token plus optional team ID.
+  const expectedCommand = getSlackLinkCommand_();
+  const expectedToken = getScriptProperty_(PROP_SLACK_VERIFICATION_TOKEN);
+  const expectedTeamId = getScriptProperty_(PROP_SLACK_TEAM_ID);
+
+  if (!expectedToken) {
+    throw new Error('Script Properties に ' + PROP_SLACK_VERIFICATION_TOKEN + ' が設定されていません。');
+  }
+
+  if (!params.command || params.command !== expectedCommand) {
+    throw new Error('想定外のSlackコマンドです: ' + (params.command || '(empty)'));
+  }
+
+  if (!params.token || params.token !== expectedToken) {
+    throw new Error('Slack Slash Commandの検証に失敗しました。');
+  }
+
+  if (!params.response_url) {
+    throw new Error('Slack response_url がありません。');
+  }
+
+  if (expectedTeamId && params.team_id !== expectedTeamId) {
+    throw new Error('許可されていないSlackワークスペースです: ' + (params.team_id || '(empty)'));
+  }
+}
+
+function getSlackLinkCommand_() {
+  return getScriptProperty_(PROP_SLACK_LINK_COMMAND) || DEFAULT_SLACK_LINK_COMMAND;
+}
+
+function buildSlackLinkCommandText_(appUrl) {
+  return (
+    '*' + APP_TITLE + '*\n' +
+    '下のリンクから開いてください。\n' +
+    '対象者リストと完了者リストを照合し、未完了メンバーのSlackメンション下書きを自分のDMへ送れます。\n' +
+    '<' + appUrl + '|ツールを開く>'
+  );
+}
+
+function postSlackCommandResponse_(responseUrl, payload) {
+  const url = String(responseUrl || '');
+  if (!/^https:\/\/hooks\.slack\.com\/commands\//.test(url)) {
+    throw new Error('Slack response_url が不正です。');
+  }
+
+  UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json; charset=utf-8',
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true,
+  });
+}
+
+function createSlackEmptyCommandResponse_() {
+  return ContentService
+    .createTextOutput('')
+    .setMimeType(ContentService.MimeType.TEXT);
 }
 
 function refreshSlackUsersDaily() {
@@ -188,6 +285,10 @@ function apiBootstrap() {
     ensureSheets_(ss);
     const lastSlackRefresh = getLastRun_(LAST_RUN_SLACK_REFRESH);
     const userMap = currentGoogleUser ? getUserMapByGoogleUser_(currentGoogleUser) : null;
+    const expectedTeamId = getScriptProperty_(PROP_SLACK_TEAM_ID);
+    const slackConnected = Boolean(
+      userMap && userMap.slack_user_id && expectedTeamId && userMap.slack_team_id === expectedTeamId
+    );
 
     return {
       ok: true,
@@ -196,17 +297,19 @@ function apiBootstrap() {
       spreadsheetUrl: ss.getUrl(),
       slackTokenConfigured: slackTokenConfigured,
       slackOAuthConfigured: slackOAuthConfigured,
-      slackConnected: Boolean(userMap && userMap.slack_user_id),
-      slackDisplayName: userMap ? userMap.slack_display_name : '',
+      slackConnected: slackConnected,
+      slackDisplayName: slackConnected ? userMap.slack_display_name : '',
       currentGoogleUser: currentGoogleUser,
-      slackUserCount: countSlackUsers_(),
-      lastSlackRefresh: lastSlackRefresh,
+      // 名簿件数はログイン済みのときだけ返す（未ログインへ情報量を絞る）。
+      slackUserCount: slackConnected ? countSlackUsers_() : 0,
+      lastSlackRefresh: slackConnected ? lastSlackRefresh : null,
     };
   });
 }
 
 function apiRefreshSlackUsers() {
   return guardApi_('apiRefreshSlackUsers', function () {
+    requireSlackMember_();
     const result = refreshSlackUsers_();
     return Object.assign({ ok: true }, result);
   });
@@ -214,6 +317,7 @@ function apiRefreshSlackUsers() {
 
 function apiRunMatch(payload) {
   return guardApi_('apiRunMatch', function () {
+    requireSlackMember_();
     const users = readSlackUsers_();
     const result = runMentionDiff_(payload || {}, users);
     setLastRun_(
@@ -267,18 +371,18 @@ function isSlackOAuthCallback_(e) {
 
 function renderSlackOAuthCallback_(e) {
   const params = (e && e.parameter) || {};
-  let title = 'Slack連携が完了しました';
-  let message = '画面に戻ると「自分のDMへ送る」を使えます。';
+  let title = 'Slackログインが完了しました';
+  let message = '画面に戻ると、未完了メンバーの確認とメンション作成を使えます。';
   let ok = true;
 
   try {
     if (params.error) {
-      throw new Error('Slack連携がキャンセルまたは拒否されました: ' + params.error);
+      throw new Error('Slackログインがキャンセルまたは拒否されました: ' + params.error);
     }
     completeSlackOAuth_(params.code, params.state);
   } catch (err) {
     ok = false;
-    title = 'Slack連携に失敗しました';
+    title = 'Slackログインに失敗しました';
     message = toSafeMessage_(err);
   }
 
@@ -293,13 +397,13 @@ function renderSlackOAuthCallback_(e) {
     'a{color:#3d6b52;font-weight:700}</style></head><body><main class="box">' +
     '<h1>' + escapeHtml_(title) + '</h1>' +
     '<p>' + escapeHtml_(message) + '</p>' +
-    '<a href="' + escapeHtml_(appUrl) + '">アプリに戻る</a>' +
-    '</main><script>setTimeout(function(){location.href=' + JSON.stringify(appUrl) + ';},1800);</script></body></html>';
+    '<a target="_blank" rel="noopener" href="' + escapeHtml_(appUrl) + '">アプリを開く</a>' +
+    '</main></body></html>';
 
   return HtmlService.createHtmlOutput(html)
     .setTitle(title)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
 function getCurrentGoogleUserKey_() {

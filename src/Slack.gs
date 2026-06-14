@@ -97,13 +97,16 @@ function buildSlackOAuthUrl_(googleUser) {
   const clientId = requireScriptProperty_(PROP_SLACK_CLIENT_ID);
   const state = createSlackOAuthState_(googleUser);
   const params = {
+    response_type: 'code',
     client_id: clientId,
-    scope: SLACK_OAUTH_BOT_SCOPES.join(','),
+    scope: SLACK_OIDC_SCOPES.join(' '),
     state: state,
     redirect_uri: getSlackRedirectUri_(),
+    // 対象ワークスペースのログイン画面へ誘導する（UX向上）。検証は team_id 照合で行う。
+    team: requireScriptProperty_(PROP_SLACK_TEAM_ID),
   };
 
-  return SLACK_OAUTH_AUTHORIZE_URL + '?' + toQueryString_(params);
+  return SLACK_OIDC_AUTHORIZE_URL + '?' + toQueryString_(params);
 }
 
 function createSlackOAuthState_(googleUser) {
@@ -122,6 +125,8 @@ function consumeSlackOAuthState_(state) {
   const key = PROP_SLACK_OAUTH_STATE_PREFIX + state;
   const raw = getScriptProperty_(key);
   if (!raw) {
+    const completed = getCompletedSlackOAuthState_(state);
+    if (completed) return completed;
     throw new Error('Slack連携の確認情報が見つかりません。もう一度連携してください。');
   }
 
@@ -147,17 +152,37 @@ function consumeSlackOAuthState_(state) {
 }
 
 function completeSlackOAuth_(code, state) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    return completeSlackOAuthLocked_(code, state);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function completeSlackOAuthLocked_(code, state) {
   const stateData = consumeSlackOAuthState_(state);
+  if (stateData.completed) return stateData;
+
   const json = exchangeSlackOAuthCode_(code);
-  const slackUserId = json.authed_user && json.authed_user.id;
-  const teamId = json.team && json.team.id;
+  const claims = decodeJwtClaims_(json.id_token);
+  const slackUserId = claims['https://slack.com/user_id'];
+  const teamId = claims['https://slack.com/team_id'];
 
   if (!slackUserId) {
-    throw new Error('Slack連携に成功しましたが、SlackユーザーIDを取得できませんでした。');
+    throw new Error('Slackログインに成功しましたが、SlackユーザーIDを取得できませんでした。');
   }
 
-  if (!hasScriptProperty_(PROP_SLACK_BOT_TOKEN) && json.access_token) {
-    setScriptProperty_(PROP_SLACK_BOT_TOKEN, json.access_token);
+  // 対象ワークスペース以外を弾く。許可外は UserMap に保存しない。
+  const expectedTeamId = requireScriptProperty_(PROP_SLACK_TEAM_ID);
+  if (teamId !== expectedTeamId) {
+    appendLog_('warn', 'slack_oauth', '許可されていないSlackワークスペースのログインを拒否しました。', {
+      googleUser: stateData.googleUser,
+      slackUserId: slackUserId,
+      slackTeamId: teamId || '',
+    });
+    throw new Error('このツールを使えるSlackワークスペースのメンバーではないため、ログインできませんでした。');
   }
 
   const cached = findCachedSlackUserById_(slackUserId);
@@ -168,29 +193,93 @@ function completeSlackOAuth_(code, state) {
   upsertUserMap_({
     google_user: stateData.googleUser,
     slack_user_id: slackUserId,
-    slack_team_id: teamId || '',
+    slack_team_id: teamId,
     slack_display_name: displayName,
     connected_at: nowIso_(),
     last_used_at: nowIso_(),
   });
 
-  appendLog_('info', 'slack_oauth', 'Slack連携が完了しました。', {
+  appendLog_('info', 'slack_oauth', 'Slackログインが完了しました。', {
     googleUser: stateData.googleUser,
     slackUserId: slackUserId,
-    slackTeamId: teamId || '',
+    slackTeamId: teamId,
   });
 
-  return {
+  const result = {
+    completed: true,
+    googleUser: stateData.googleUser,
     slackUserId: slackUserId,
-    slackTeamId: teamId || '',
+    slackTeamId: teamId,
     slackDisplayName: displayName,
   };
+  markSlackOAuthStateCompleted_(state, result);
+  return result;
+}
+
+function getCompletedSlackOAuthState_(state) {
+  const raw = getScriptProperty_(PROP_SLACK_OAUTH_DONE_PREFIX + state);
+  if (!raw) return null;
+
+  try {
+    const data = JSON.parse(raw);
+    const completedAt = new Date(data.completedAt || 0).getTime();
+    if (!completedAt || Date.now() - completedAt > SLACK_OAUTH_STATE_TTL_MS) {
+      PropertiesService.getScriptProperties().deleteProperty(PROP_SLACK_OAUTH_DONE_PREFIX + state);
+      return null;
+    }
+    return Object.assign({ completed: true }, data);
+  } catch (err) {
+    PropertiesService.getScriptProperties().deleteProperty(PROP_SLACK_OAUTH_DONE_PREFIX + state);
+    return null;
+  }
+}
+
+function markSlackOAuthStateCompleted_(state, result) {
+  setScriptProperty_(
+    PROP_SLACK_OAUTH_DONE_PREFIX + state,
+    JSON.stringify(Object.assign({}, result, { completedAt: nowIso_() }))
+  );
+}
+
+// id_token(JWT) のペイロードからクレームを取り出す。confidential client が直接TLSで
+// トークン交換したレスポンスなので署名検証は省略する。
+function decodeJwtClaims_(idToken) {
+  const raw = String(idToken || '');
+  const segments = raw.split('.');
+  if (segments.length < 2 || !segments[1]) {
+    throw new Error('Slackログインの応答を確認できませんでした。');
+  }
+
+  try {
+    const bytes = Utilities.base64DecodeWebSafe(segments[1]);
+    const payload = Utilities.newBlob(bytes).getDataAsString('UTF-8');
+    return JSON.parse(payload) || {};
+  } catch (err) {
+    throw new Error('Slackログインの応答を確認できませんでした。');
+  }
+}
+
+// 名簿を読む api* / 送信パスのログイン必須ゲート。現在のGoogleセッションに紐づく
+// UserMap があり、対象ワークスペースの team_id と一致していればメンバーとみなす。
+function requireSlackMember_() {
+  const googleUser = getCurrentGoogleUserKeySafely_();
+  if (!googleUser) {
+    throw new Error('NEEDS_SLACK_LOGIN');
+  }
+
+  const userMap = getUserMapByGoogleUser_(googleUser);
+  const expectedTeamId = requireScriptProperty_(PROP_SLACK_TEAM_ID);
+  if (!userMap || !userMap.slack_user_id || userMap.slack_team_id !== expectedTeamId) {
+    throw new Error('NEEDS_SLACK_LOGIN');
+  }
+
+  return userMap;
 }
 
 function exchangeSlackOAuthCode_(code) {
   const clientId = requireScriptProperty_(PROP_SLACK_CLIENT_ID);
   const clientSecret = requireScriptProperty_(PROP_SLACK_CLIENT_SECRET);
-  const res = UrlFetchApp.fetch(SLACK_API_BASE + '/oauth.v2.access', {
+  const res = UrlFetchApp.fetch(SLACK_OIDC_TOKEN_URL, {
     method: 'post',
     headers: {
       Authorization: 'Basic ' + Utilities.base64Encode(clientId + ':' + clientSecret),
@@ -202,17 +291,13 @@ function exchangeSlackOAuthCode_(code) {
     muteHttpExceptions: true,
   });
 
-  return parseSlackResponse_(res, 'Slack OAuth');
+  return parseSlackResponse_(res, 'Slackログイン');
 }
 
 function sendMentionDraftToSelf(mentionText) {
-  const googleUser = getCurrentGoogleUserKey_();
-  const userMap = getUserMapByGoogleUser_(googleUser);
+  const userMap = requireSlackMember_();
+  const googleUser = userMap.google_user;
   const text = normalizeMentionDraftText_(mentionText);
-
-  if (!userMap || !userMap.slack_user_id) {
-    throw new Error('Slack連携が必要です。');
-  }
 
   if (!text) {
     throw new Error('送信できるメンション対象者がいません。');

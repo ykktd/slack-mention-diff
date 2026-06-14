@@ -55,12 +55,45 @@
 
         <section class="intro">
           <p class="lead">
-            出欠、フォーム回答、提出物、確認依頼などに使えます。全員の名前と完了済みの人を貼ると、
+            出欠、フォーム回答、提出物のリマインドなどに使えます。全員の名前と完了済みの人を貼ると、
             未完了メンバーのSlackメンションだけを作ります。自分のDMに届いたメンションを、必要な案内文と一緒にチャンネルへ貼ってください。
           </p>
         </section>
 
-        <section class="card input-card">
+        <section id="loginGate" class="card login-gate hidden">
+          <span class="login-gate-mark" aria-hidden="true">
+            <svg viewBox="0 0 122.8 122.8" role="img" aria-label="Slack">
+              <path d="M25.8 77.6c0 7.1-5.8 12.9-12.9 12.9S0 84.7 0 77.6s5.8-12.9 12.9-12.9h12.9v12.9zm6.5 0c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9v32.3c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V77.6z" fill="#e01e5a"/>
+              <path d="M45.2 25.8c-7.1 0-12.9-5.8-12.9-12.9S38.1 0 45.2 0s12.9 5.8 12.9 12.9v12.9H45.2zm0 6.5c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H12.9C5.8 58.1 0 52.3 0 45.2s5.8-12.9 12.9-12.9h32.3z" fill="#36c5f0"/>
+              <path d="M97 45.2c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9-5.8 12.9-12.9 12.9H97V45.2zm-6.5 0c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V12.9C64.7 5.8 70.5 0 77.6 0s12.9 5.8 12.9 12.9v32.3z" fill="#2eb67d"/>
+              <path d="M77.6 97c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9-12.9-5.8-12.9-12.9V97h12.9zm0-6.5c-7.1 0-12.9-5.8-12.9-12.9s5.8-12.9 12.9-12.9h32.3c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H77.6z" fill="#ecb22e"/>
+            </svg>
+          </span>
+          <h2>Slackでログインして始めましょう</h2>
+          <p id="loginGateLead">
+            このツールは、対象のSlackワークスペースのメンバーだけが使えます。あなた本人としてSlackでログインすると、
+            未完了メンバーの確認とメンション作成ができます。
+          </p>
+          <button type="button" id="loginGateBtn" class="btn btn-primary btn-slack-login">
+            <span class="slack-mark-inline" aria-hidden="true">
+              <svg viewBox="0 0 122.8 122.8" role="img" aria-label="">
+                <path d="M25.8 77.6c0 7.1-5.8 12.9-12.9 12.9S0 84.7 0 77.6s5.8-12.9 12.9-12.9h12.9v12.9zm6.5 0c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9v32.3c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V77.6z" fill="#e01e5a"/>
+                <path d="M45.2 25.8c-7.1 0-12.9-5.8-12.9-12.9S38.1 0 45.2 0s12.9 5.8 12.9 12.9v12.9H45.2zm0 6.5c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H12.9C5.8 58.1 0 52.3 0 45.2s5.8-12.9 12.9-12.9h32.3z" fill="#36c5f0"/>
+                <path d="M97 45.2c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9-5.8 12.9-12.9 12.9H97V45.2zm-6.5 0c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V12.9C64.7 5.8 70.5 0 77.6 0s12.9 5.8 12.9 12.9v32.3z" fill="#2eb67d"/>
+                <path d="M77.6 97c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9-12.9-5.8-12.9-12.9V97h12.9zm0-6.5c-7.1 0-12.9-5.8-12.9-12.9s5.8-12.9 12.9-12.9h32.3c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H77.6z" fill="#ecb22e"/>
+              </svg>
+            </span>
+            Slackでログイン
+          </button>
+          <p id="loginGateNote" class="login-gate-note">
+            ログインは一度きりです。次に開くときは、同じブラウザならそのまま使えます。Botの管理者設定とは別です。
+          </p>
+          <p id="loginGateConfig" class="login-gate-note login-gate-config hidden">
+            Slackログインの管理者設定がまだ終わっていません。管理者に確認してください。
+          </p>
+        </section>
+
+        <section id="inputCard" class="card input-card">
           <div class="section-header">
             <span class="section-label">リストを貼り付ける</span>
             <span class="section-line"></span>
@@ -115,7 +148,7 @@
             <div class="dm-actions">
               <button type="button" id="connectSlackBtn" class="btn btn-secondary hidden">
                 <span data-lucide="link"></span>
-                Slackと連携
+                Slackでログイン
               </button>
               <button type="button" id="sendDmBtn" class="btn btn-primary" disabled>
                 <span data-lucide="send"></span>
@@ -175,7 +208,7 @@
       <span id="overlayText">処理中です。</span>
     </div>
 
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/lucide@1.18.0/dist/umd/lucide.min.js"></script>
     <?!= include('JavaScript'); ?>
   </body>
 </html>

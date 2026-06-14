@@ -100,11 +100,11 @@
     width: 100%;
     max-width: var(--content-max);
     margin: 0 auto;
-    padding: 22px 16px 88px;
+    padding: 14px 16px 88px;
   }
 
   .intro {
-    margin: 4px 0 16px;
+    margin: 0 0 16px;
   }
 
   .lead {
@@ -206,7 +206,10 @@
     gap: 7px;
     font-weight: 700;
     cursor: pointer;
-    transition: filter 0.15s ease, background 0.15s ease, transform 0.05s ease;
+    transition:
+      filter 0.15s ease,
+      background 0.15s ease,
+      transform 0.05s ease;
   }
 
   .btn svg {
@@ -282,6 +285,70 @@
   .banner p {
     margin: 2px 0 0;
     color: var(--text-sub);
+  }
+
+  .login-gate {
+    margin-bottom: 22px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 30px 20px;
+    text-align: center;
+  }
+
+  .login-gate-mark {
+    width: 46px;
+    height: 46px;
+    display: inline-grid;
+    place-items: center;
+  }
+
+  .login-gate-mark svg {
+    display: block;
+    width: 46px;
+    height: 46px;
+  }
+
+  .login-gate h2 {
+    margin: 2px 0 0;
+    font-size: 17px;
+  }
+
+  .login-gate p {
+    margin: 0;
+    max-width: 460px;
+    color: var(--text-sub);
+  }
+
+  .login-gate .login-gate-note {
+    font-size: 12px;
+    color: var(--text-mute);
+  }
+
+  .login-gate .login-gate-config {
+    border: 1px solid #f0d080;
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: var(--warn-soft);
+    color: var(--warn);
+  }
+
+  .btn-slack-login {
+    margin-top: 4px;
+  }
+
+  .slack-mark-inline {
+    width: 18px;
+    height: 18px;
+    display: inline-grid;
+    place-items: center;
+  }
+
+  .slack-mark-inline svg {
+    display: block;
+    width: 18px;
+    height: 18px;
   }
 
   .summary-grid {

@@ -14,13 +14,22 @@ const PROP_SLACK_BOT_TOKEN = 'SLACK_BOT_TOKEN';
 const PROP_SLACK_CLIENT_ID = 'SLACK_CLIENT_ID';
 const PROP_SLACK_CLIENT_SECRET = 'SLACK_CLIENT_SECRET';
 const PROP_SLACK_REDIRECT_URI = 'SLACK_REDIRECT_URI';
+const PROP_SLACK_VERIFICATION_TOKEN = 'SLACK_VERIFICATION_TOKEN';
+const PROP_SLACK_TEAM_ID = 'SLACK_TEAM_ID';
+const PROP_SLACK_LINK_COMMAND = 'SLACK_LINK_COMMAND';
 const PROP_SLACK_OAUTH_STATE_PREFIX = 'SLACK_OAUTH_STATE_';
+const PROP_SLACK_OAUTH_DONE_PREFIX = 'SLACK_OAUTH_DONE_';
 
 const SLACK_API_BASE = 'https://slack.com/api';
-const SLACK_OAUTH_AUTHORIZE_URL = 'https://slack.com/oauth/v2/authorize';
-const SLACK_OAUTH_BOT_SCOPES = ['users:read', 'chat:write', 'im:write'];
+// メンバー本人ログインは Sign in with Slack（OpenID Connect）を使う。
+const SLACK_OIDC_AUTHORIZE_URL = 'https://slack.com/openid/connect/authorize';
+const SLACK_OIDC_TOKEN_URL = 'https://slack.com/api/openid.connect.token';
+const SLACK_OIDC_SCOPES = ['openid'];
+// Bot 導入（管理者が一度だけ手動で行う）用の scope。文書・参照用に残す。
+const SLACK_OAUTH_BOT_SCOPES = ['users:read', 'chat:write', 'im:write', 'commands'];
 const SLACK_OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const SLACK_USERS_PAGE_LIMIT = 200;
+const DEFAULT_SLACK_LINK_COMMAND = '/mention-diff';
 const DAILY_TRIGGER_FUNCTION = 'refreshSlackUsersDaily';
 
 const SHEET_SETTINGS = 'Settings';
