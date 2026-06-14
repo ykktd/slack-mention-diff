@@ -2,7 +2,7 @@
  * Config.gs - shared constants and Script Properties helpers.
  */
 
-const APP_TITLE = '未完了者抽出・Slackメンション下書き送信';
+const APP_TITLE = '未完了メンバー確認・Slackメンション作成';
 const MANAGEMENT_SPREADSHEET_NAME = 'Slack Mention Diff 管理用データ';
 
 // ブラウザタブのファビコン。setFaviconUrl はURLのパスが画像拡張子(.png等)で

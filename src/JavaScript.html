@@ -4,6 +4,7 @@
       bootstrap: null,
       result: null,
       selections: {},
+      confirmedSelections: {},
     };
 
     const els = {};
@@ -165,6 +166,7 @@
       }
 
       state.selections = {};
+      state.confirmedSelections = {};
       setDmNotice('', '');
       setBusy(true, '未完了メンバーを確認しています。');
       callApi('apiRunMatch', { targetText: targetText, completedText: completedText })
@@ -216,7 +218,7 @@
         main.appendChild(element('div', 'person-name', item.originalName));
         main.appendChild(element('div', 'person-meta', slackMeta(item.user)));
         row.appendChild(main);
-        row.appendChild(element('span', 'badge', '<@' + item.user.userId + '>'));
+        row.appendChild(element('span', 'badge', mentionDisplay(item.user)));
         els.mentionableList.appendChild(row);
       });
     }
@@ -242,6 +244,7 @@
           const emptyList = element('div', 'candidate-list');
           emptyList.appendChild(noCandidateRow(item));
           wrap.appendChild(emptyList);
+          wrap.appendChild(reviewActions(item));
           els.reviewList.appendChild(wrap);
           return;
         }
@@ -252,6 +255,7 @@
         });
         list.appendChild(noCandidateRow(item));
         wrap.appendChild(list);
+        wrap.appendChild(reviewActions(item));
         els.reviewList.appendChild(wrap);
       });
     }
@@ -266,15 +270,14 @@
       input.id = id;
       input.checked = hasOwn(state.selections, item.key) && state.selections[item.key] === candidate.userId;
       input.addEventListener('change', function () {
-        state.selections[item.key] = candidate.userId;
-        updateMentionOutput();
+        selectReviewCandidate(item, candidate.userId);
       });
 
       label.appendChild(input);
       label.appendChild(avatar(candidate));
 
       const text = element('div', 'candidate-label');
-      text.appendChild(element('div', 'candidate-name', candidate.label || candidate.userId));
+      text.appendChild(element('div', 'candidate-name', displayName(candidate)));
       text.appendChild(element('div', 'candidate-meta', slackMeta(candidate) + ' / ' + candidate.matchLabel));
       label.appendChild(text);
       return label;
@@ -288,8 +291,7 @@
       input.value = '';
       input.checked = hasOwn(state.selections, item.key) && state.selections[item.key] === '';
       input.addEventListener('change', function () {
-        state.selections[item.key] = '';
-        updateMentionOutput();
+        selectReviewCandidate(item, '');
       });
 
       label.appendChild(input);
@@ -300,6 +302,47 @@
       text.appendChild(element('div', 'candidate-meta', '自分に送るメンションには含めません'));
       label.appendChild(text);
       return label;
+    }
+
+    function reviewActions(item) {
+      const actions = element('div', 'review-actions');
+      const hasSelected = hasOwn(state.selections, item.key);
+      const isConfirmed = hasOwn(state.confirmedSelections, item.key) &&
+        state.confirmedSelections[item.key] === state.selections[item.key];
+
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'btn btn-secondary';
+      button.disabled = !hasSelected || isConfirmed;
+      button.textContent = isConfirmed ? '確定済み' : 'この選択で確定';
+      button.addEventListener('click', function () {
+        state.confirmedSelections[item.key] = state.selections[item.key];
+        renderReview((state.result && state.result.needsReview) || []);
+        updateMentionOutput();
+      });
+
+      const status = element('div', 'review-status');
+      if (isConfirmed) {
+        status.className = 'review-status review-status-confirmed';
+        status.textContent = state.selections[item.key]
+          ? 'この人をメンションに含めます。'
+          : 'この人はメンションに含めません。';
+      } else if (hasSelected) {
+        status.textContent = 'まだ確定されていません。';
+      } else {
+        status.textContent = '候補を選んでから確定してください。';
+      }
+
+      actions.appendChild(button);
+      actions.appendChild(status);
+      return actions;
+    }
+
+    function selectReviewCandidate(item, userId) {
+      state.selections[item.key] = userId;
+      delete state.confirmedSelections[item.key];
+      renderReview((state.result && state.result.needsReview) || []);
+      updateMentionOutput();
     }
 
     function renderUnmatched(items) {
@@ -318,12 +361,16 @@
     }
 
     function updateMentionOutput() {
-      els.mentionOutput.value = getMentionDraftText();
+      els.mentionOutput.value = getMentionDraftDisplayText();
       updateDmControls();
     }
 
     function getMentionDraftText() {
       return getMentionDraftMentions().join(' ');
+    }
+
+    function getMentionDraftDisplayText() {
+      return getMentionDraftDisplayMentions().join(' ');
     }
 
     function getMentionDraftMentions() {
@@ -334,8 +381,32 @@
       const reviewItems = result.needsReview || [];
 
       reviewItems.forEach(function (item) {
-        const selectedId = hasOwn(state.selections, item.key) ? state.selections[item.key] : '';
+        const selectedId = hasOwn(state.confirmedSelections, item.key)
+          ? state.confirmedSelections[item.key]
+          : '';
         if (selectedId) mentions.push('<@' + selectedId + '>');
+      });
+
+      return mentions;
+    }
+
+    function getMentionDraftDisplayMentions() {
+      const result = state.result || {};
+      const mentions = (result.mentionable || []).map(function (item) {
+        return mentionDisplay(item.user);
+      });
+      const reviewItems = result.needsReview || [];
+
+      reviewItems.forEach(function (item) {
+        const selectedId = hasOwn(state.confirmedSelections, item.key)
+          ? state.confirmedSelections[item.key]
+          : '';
+        if (!selectedId) return;
+
+        const selected = (item.candidates || []).filter(function (candidate) {
+          return candidate.userId === selectedId;
+        })[0];
+        mentions.push(mentionDisplay(selected));
       });
 
       return mentions;
@@ -411,7 +482,7 @@
 
       const unresolved = countUnresolvedReviewItems();
       if (unresolved > 0) {
-        return 'まだ選択が必要な人がいます。正しいSlackメンバー、または「該当者なし」を選んでください。';
+        return 'まだ確定が必要な人がいます。正しいSlackメンバー、または「該当者なし」を選んでから確定してください。';
       }
 
       if (getMentionDraftMentions().length === 0) {
@@ -424,7 +495,7 @@
     function countUnresolvedReviewItems() {
       const result = state.result || {};
       return (result.needsReview || []).filter(function (item) {
-        return !hasOwn(state.selections, item.key);
+        return !hasOwn(state.confirmedSelections, item.key);
       }).length;
     }
 
@@ -459,7 +530,7 @@
         return img;
       }
 
-      const label = candidate.label || candidate.displayName || candidate.realName || candidate.name || candidate.userId || '?';
+      const label = displayName(candidate);
       return element('span', 'avatar', label.slice(0, 1));
     }
 
@@ -468,8 +539,16 @@
       if (user.displayName) parts.push(user.displayName);
       if (user.name) parts.push('@' + user.name);
       if (user.realName && user.realName !== user.displayName) parts.push(user.realName);
-      if (user.userId) parts.push(user.userId);
-      return parts.join(' / ');
+      return parts.join(' / ') || 'Slackユーザー';
+    }
+
+    function mentionDisplay(user) {
+      if (!user) return '@Slackユーザー';
+      return '@' + displayName(user);
+    }
+
+    function displayName(user) {
+      return (user && (user.displayName || user.realName || user.name)) || 'Slackユーザー';
     }
 
     function setBusy(isBusy, text) {

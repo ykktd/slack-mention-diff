@@ -38,7 +38,8 @@
           </div>
           <button type="button" id="refreshUsersBtn" class="btn btn-secondary btn-small" disabled>
             <span data-lucide="refresh-cw"></span>
-            Slackメンバー一覧を更新
+            <span class="refresh-label-full">Slackメンバー一覧を更新</span>
+            <span class="refresh-label-short">メンバー更新</span>
           </button>
         </div>
       </header>
@@ -53,8 +54,6 @@
         </section>
 
         <section class="intro">
-          <p class="eyebrow">全員リストから完了済みの人を引きます</p>
-          <h1>まだ完了していない人をSlackで知らせる</h1>
           <p class="lead">
             出欠、フォーム回答、提出物、確認依頼などに使えます。全員の名前と完了済みの人を貼ると、
             未完了メンバーのSlackメンションだけを作ります。自分のDMに届いたメンションを、必要な案内文と一緒にチャンネルへ貼ってください。
@@ -81,7 +80,7 @@
 
             <label class="field">
               <span class="field-label">すでに完了したメンバー</span>
-              <span class="field-help">回答・提出・確認などが済んだ人だけを1行に1人ずつ貼り付けてください。</span>
+              <span class="field-help">回答・確認などが済んだ人だけを1行に1人ずつ貼り付けてください。</span>
               <textarea
                 id="completedInput"
                 rows="10"
@@ -163,7 +162,7 @@
 
             <details class="debug-mention">
               <summary>自分のDMへ送るメンションを確認する</summary>
-              <textarea id="mentionOutput" rows="4" readonly placeholder="<@USERID> の形式で表示されます"></textarea>
+              <textarea id="mentionOutput" rows="4" readonly placeholder="@表示名 の形式で表示されます"></textarea>
             </details>
           </div>
         </section>

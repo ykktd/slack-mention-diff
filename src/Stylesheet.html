@@ -104,28 +104,11 @@
   }
 
   .intro {
-    max-width: 640px;
-    margin: 4px 0 18px;
-  }
-
-  .eyebrow {
-    margin: 0 0 4px;
-    color: var(--accent);
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-  }
-
-  h1 {
-    margin: 0;
-    color: var(--accent);
-    font-size: 24px;
-    line-height: 1.38;
-    letter-spacing: 0;
+    margin: 4px 0 16px;
   }
 
   .lead {
-    margin: 8px 0 0;
+    margin: 0;
     color: var(--text-sub);
   }
 
@@ -182,6 +165,10 @@
   .cache-meta {
     color: var(--text-sub);
     font-size: 12px;
+  }
+
+  .field-help {
+    line-height: 1.45;
   }
 
   textarea {
@@ -255,6 +242,10 @@
     min-height: 34px;
     padding: 7px 10px;
     font-size: 12px;
+  }
+
+  .refresh-label-short {
+    display: none;
   }
 
   .btn:disabled {
@@ -455,6 +446,12 @@
     min-width: 0;
   }
 
+  .person-row .badge {
+    max-width: 48%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   .person-name {
     font-weight: 700;
   }
@@ -503,6 +500,23 @@
     width: 16px;
     height: 16px;
     accent-color: var(--accent);
+  }
+
+  .review-actions {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .review-status {
+    color: var(--text-sub);
+    font-size: 12px;
+  }
+
+  .review-status-confirmed {
+    color: var(--accent);
+    font-weight: 700;
   }
 
   .avatar {
@@ -606,12 +620,12 @@
   }
 
   @media (min-width: 720px) {
-    h1 {
-      font-size: 28px;
-    }
-
     .input-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .input-grid .field-help {
+      min-height: 2.9em;
     }
 
     .input-actions,
@@ -638,10 +652,18 @@
     }
 
     .btn-small {
-      width: 38px;
+      flex: 0 0 auto;
       padding: 7px;
       overflow: hidden;
       white-space: nowrap;
+    }
+
+    .refresh-label-full {
+      display: none;
+    }
+
+    .refresh-label-short {
+      display: inline;
     }
 
     .btn-small svg {
