@@ -156,6 +156,15 @@
     gap: 5px;
   }
 
+  .field-heading {
+    min-height: 1.65em;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
   .field-label {
     font-weight: 700;
   }
@@ -169,6 +178,27 @@
 
   .field-help {
     line-height: 1.45;
+  }
+
+  .roster-link {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    width: fit-content;
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+  }
+
+  .roster-link:hover {
+    text-decoration: underline;
+  }
+
+  .roster-link [data-lucide] {
+    width: 13px;
+    height: 13px;
   }
 
   textarea {

@@ -267,6 +267,7 @@ function apiBootstrap() {
     const slackTokenConfigured = hasScriptProperty_(PROP_SLACK_BOT_TOKEN);
     const slackOAuthConfigured = isSlackOAuthConfigured_();
     const currentGoogleUser = getCurrentGoogleUserKeySafely_();
+    const rosterUrl = getScriptProperty_(PROP_ROSTER_URL) || '';
 
     if (!spreadsheetId) {
       return {
@@ -278,6 +279,7 @@ function apiBootstrap() {
         currentGoogleUser: currentGoogleUser,
         slackUserCount: 0,
         lastSlackRefresh: null,
+        rosterUrl: rosterUrl,
       };
     }
 
@@ -303,6 +305,7 @@ function apiBootstrap() {
       // 名簿件数はログイン済みのときだけ返す（未ログインへ情報量を絞る）。
       slackUserCount: slackConnected ? countSlackUsers_() : 0,
       lastSlackRefresh: slackConnected ? lastSlackRefresh : null,
+      rosterUrl: rosterUrl,
     };
   });
 }

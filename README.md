@@ -112,6 +112,7 @@ Apps Script左側の歯車アイコン「プロジェクトの設定」→「ス
 | `SLACK_VERIFICATION_TOKEN` | Slack AppのVerification Token |
 | `SLACK_TEAM_ID` | 利用を許可するSlackワークスペースのTeam ID |
 | `SLACK_LINK_COMMAND` | 任意。未設定なら `/mention-diff` |
+| `ROSTER_URL` | 任意。公開用名簿のURL。設定すると対象者リスト欄に「名簿を開く」リンクが表示される |
 
 `SPREADSHEET_ID` は初回セットアップ時に自動保存されるため、手動設定は不要です。
 

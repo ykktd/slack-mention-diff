@@ -101,7 +101,13 @@
 
           <div class="input-grid">
             <label class="field">
-              <span class="field-label">確認したいメンバー</span>
+              <span class="field-heading">
+                <span class="field-label">確認したいメンバー</span>
+                <a id="rosterLink" class="roster-link hidden" target="_blank" rel="noopener">
+                  <span data-lucide="external-link"></span>
+                  名簿を開く
+                </a>
+              </span>
               <span class="field-help">全員の名前を1行に1人ずつ貼り付けてください。</span>
               <textarea
                 id="targetInput"
@@ -112,7 +118,9 @@
             </label>
 
             <label class="field">
-              <span class="field-label">すでに完了したメンバー</span>
+              <span class="field-heading">
+                <span class="field-label">すでに完了したメンバー</span>
+              </span>
               <span class="field-help">回答・確認などが済んだ人だけを1行に1人ずつ貼り付けてください。</span>
               <textarea
                 id="completedInput"
